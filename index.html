@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitch Chat AI Bot</title>
+    <style>
+        :root {
+            --primary: #9147ff;
+            --dark: #18181b;
+            --light: #efeff1;
+            --secondary: #772ce8;
+            --success: #00b074;
+            --warning: #ffca28;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--dark);
+            color: var(--light);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+            margin-bottom: 20px;
+        }
+        h1, h2, h3 {
+            margin: 0;
+            color: var(--light);
+        }
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ff5252;
+        }
+        .status-indicator.connected {
+            background-color: var(--success);
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background-color: #333;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .tab.active {
+            background-color: var(--primary);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background-color: #222;
+            color: var(--light);
+        }
+        button {
+            padding: 10px 20px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: var(--secondary);
+        }
+        .chat-container {
+            height: 500px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: #222;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        .user-message {
+            background-color: #333;
+        }
+        .bot-message {
+            background-color: var(--primary);
+            opacity: 0.8;
+        }
+        .username {
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        .bot-list {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .bot-card {
+            background-color: #333;
+            border-radius: 5px;
+            padding: 15px;
+            position: relative;
+        }
+        .bot-card.active {
+            border: 2px solid var(--primary);
+        }
+        .bot-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .settings-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #222;
+            border-radius: 5px;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: var(--primary);
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Twitch Chat AI Bot</h1>
+            <div class="connection-status">
+                <div class="status-indicator" id="connection-indicator"></div>
+                <span id="connection-status">Disconnected</span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="connection">Connection</div>
+            <div class="tab" data-tab="bots">Bots</div>
+            <div class="tab" data-tab="chat">Chat</div>
+            <div class="tab" data-tab="settings">Settings</div>
+        </div>
+
+        <div class="tab-content active" id="connection-tab">
+            <div class="settings-section">
+                <h2>Twitch Connection</h2>
+                <div class="form-group">
+                    <label for="channel-name">Channel Name</label>
+                    <input type="text" id="channel-name" placeholder="Enter Twitch channel name">
+                </div>
+                <div class="form-group">
+                    <label for="oauth-token">OAuth Token (optional)</label>
+                    <input type="password" id="oauth-token" placeholder="Enter OAuth token">
+                    <small>Get your token at <a href="https://twitchapps.com/tmi/" target="_blank">https://twitchapps.com/tmi/</a></small>
+                </div>
+                <button id="connect-btn">Connect</button>
+                <button id="disconnect-btn" disabled>Disconnect</button>
+            </div>
+        </div>
+
+        <div class="tab-content" id="bots-tab">
+            <div class="settings-section">
+                <h2>Create New Bot</h2>
+                <div class="form-group">
+                    <label for="bot-name">Bot Name</label>
+                    <input type="text" id="bot-name" placeholder="Enter bot name">
+                </div>
+                <div class="form-group">
+                    <label for="bot-context">Context/Personality</label>
+                    <textarea id="bot-context" rows="5" placeholder="Enter instructions for how your bot should behave and respond..."></textarea>
+                </div>
+                <button id="create-bot-btn">Create Bot</button>
+            </div>
+
+            <h2>Your Bots</h2>
+            <div class="bot-list" id="bot-list">
+                <!-- Bot cards will appear here -->
+            </div>
+        </div>
+
+        <div class="tab-content" id="chat-tab">
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages">
+                    <!-- Chat messages will appear here -->
+                </div>
+            </div>
+            <div class="form-group" style="margin-top: 15px;">
+                <div class="active-bot-info">
+                    <p>Active Bot: <span id="active-bot-name">None</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="settings-tab">
+            <div class="settings-section">
+                <h2>Response Settings</h2>
+                <div class="form-group">
+                    <label for="response-delay">Response Delay (seconds)</label>
+                    <input type="number" id="response-delay" min="1" max="30" value="3">
+                </div>
+                <div class="form-group">
+                    <label for="activity-threshold">Activity Threshold (messages)</label>
+                    <input type="number" id="activity-threshold" min="1" max="20" value="5">
+                </div>
+                <div class="form-group">
+                    <label for="max-context-messages">Max Context Messages</label>
+                    <input type="number" id="max-context-messages" min="5" max="50" value="10">
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <h2>Text-to-Speech Settings</h2>
+                <div class="form-group">
+                    <label for="tts-enabled">Enable TTS</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="tts-enabled" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="tts-voice">Voice</label>
+                    <select id="tts-voice"></select>
+                </div>
+                <div class="form-group">
+                    <label for="tts-volume">Volume</label>
+                    <input type="range" id="tts-volume" min="0" max="1" step="0.1" value="0.8">
+                </div>
+                <div class="form-group">
+                    <label for="tts-rate">Speed</label>
+                    <input type="range" id="tts-rate" min="0.5" max="2" step="0.1" value="1">
+                </div>
+                <div class="form-group">
+                    <label for="tts-pitch">Pitch</label>
+                    <input type="range" id="tts-pitch" min="0.5" max="2" step="0.1" value="1">
+                </div>
+                <button id="test-tts-btn">Test TTS</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "tmi.js": "https://cdn.jsdelivr.net/npm/tmi.js@1.8.5/index.min.js"
+        }
+    }
+    </script>
+    <script type="module">
+        import tmi from 'tmi.js';
+
+        // State
+        const state = {
+            client: null,
+            connected: false,
+            channel: '',
+            bots: [],
+            activeBot: null,
+            chatMessages: [],
+            settings: {
+                responseDelay: 3,
+                activityThreshold: 5,
+                maxContextMessages: 10,
+                tts: {
+                    enabled: true,
+                    voice: null,
+                    volume: 0.8,
+                    rate: 1,
+                    pitch: 1
+                }
+            },
+            messageCounter: 0,
+            lastBotResponse: Date.now(),
+            responseTimer: null,
+            speechSynthesis: window.speechSynthesis,
+            voices: []
+        };
+
+        // DOM Elements
+        const elements = {
+            tabs: document.querySelectorAll('.tab'),
+            tabContents: document.querySelectorAll('.tab-content'),
+            connectionIndicator: document.getElementById('connection-indicator'),
+            connectionStatus: document.getElementById('connection-status'),
+            channelName: document.getElementById('channel-name'),
+            oauthToken: document.getElementById('oauth-token'),
+            connectBtn: document.getElementById('connect-btn'),
+            disconnectBtn: document.getElementById('disconnect-btn'),
+            botName: document.getElementById('bot-name'),
+            botContext: document.getElementById('bot-context'),
+            createBotBtn: document.getElementById('create-bot-btn'),
+            botList: document.getElementById('bot-list'),
+            chatMessages: document.getElementById('chat-messages'),
+            activeBotName: document.getElementById('active-bot-name'),
+            responseDelay: document.getElementById('response-delay'),
+            activityThreshold: document.getElementById('activity-threshold'),
+            maxContextMessages: document.getElementById('max-context-messages'),
+            ttsEnabled: document.getElementById('tts-enabled'),
+            ttsVoice: document.getElementById('tts-voice'),
+            ttsVolume: document.getElementById('tts-volume'),
+            ttsRate: document.getElementById('tts-rate'),
+            ttsPitch: document.getElementById('tts-pitch'),
+            testTtsBtn: document.getElementById('test-tts-btn')
+        };
+
+        // Initialize the application
+        function init() {
+            // Tab switching
+            elements.tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    elements.tabs.forEach(t => t.classList.remove('active'));
+                    elements.tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    tab.classList.add('active');
+                    const tabId = `${tab.dataset.tab}-tab`;
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+
+            // Load saved state from localStorage
+            loadState();
+
+            // Initialize TTS
+            initTTS();
+
+            // Add event listeners
+            elements.connectBtn.addEventListener('click', connectToTwitch);
+            elements.disconnectBtn.addEventListener('click', disconnectFromTwitch);
+            elements.createBotBtn.addEventListener('click', createBot);
+            elements.testTtsBtn.addEventListener('click', testTTS);
+            
+            // Settings change listeners
+            elements.responseDelay.addEventListener('change', updateSettings);
+            elements.activityThreshold.addEventListener('change', updateSettings);
+            elements.maxContextMessages.addEventListener('change', updateSettings);
+            elements.ttsEnabled.addEventListener('change', updateSettings);
+            elements.ttsVoice.addEventListener('change', updateSettings);
+            elements.ttsVolume.addEventListener('change', updateSettings);
+            elements.ttsRate.addEventListener('change', updateSettings);
+            elements.ttsPitch.addEventListener('change', updateSettings);
+            
+            // Render initial state
+            renderBots();
+            updateConnectionStatus();
+        }
+
+        // Initialize TTS and populate voice options
+        function initTTS() {
+            // Get available voices
+            const populateVoices = () => {
+                state.voices = state.speechSynthesis.getVoices();
+                elements.ttsVoice.innerHTML = '';
+                
+                state.voices.forEach((voice, index) => {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = `${voice.name} (${voice.lang})`;
+                    elements.ttsVoice.appendChild(option);
+                });
+                
+                // Set default voice
+                if (state.settings.tts.voice !== null) {
+                    elements.ttsVoice.value = state.settings.tts.voice;
+                }
+            };
+            
+            // Chrome needs this event
+            if (state.speechSynthesis.onvoiceschanged !== undefined) {
+                state.speechSynthesis.onvoiceschanged = populateVoices;
+            }
+            
+            populateVoices();
+        }
+
+        // Connect to Twitch chat
+        function connectToTwitch() {
+            const channel = elements.channelName.value.trim();
+            if (!channel) {
+                alert('Please enter a channel name');
+                return;
+            }
+            
+            state.channel = channel;
+            
+            const options = {
+                connection: {
+                    reconnect: true,
+                    secure: true
+                },
+                channels: [channel]
+            };
+            
+            // Add OAuth token if provided
+            const token = elements.oauthToken.value.trim();
+            if (token) {
+                options.identity = {
+                    username: 'justinfan12345', // Anonymous username if no valid token
+                    password: token
+                };
+            }
+            
+            // Create client
+            state.client = new tmi.Client(options);
+            
+            // Register event handlers
+            state.client.on('connected', onConnected);
+            state.client.on('disconnected', onDisconnected);
+            state.client.on('message', onMessage);
+            
+            // Connect to Twitch
+            state.client.connect().catch(err => {
+                console.error('Connection error:', err);
+                alert(`Failed to connect: ${err.message}`);
+                state.client = null;
+                updateConnectionStatus();
+            });
+        }
+
+        // Disconnect from Twitch
+        function disconnectFromTwitch() {
+            if (state.client) {
+                state.client.disconnect();
+                state.client = null;
+                state.connected = false;
+                updateConnectionStatus();
+                saveState();
+            }
+        }
+
+        // Handle successful connection
+        function onConnected() {
+            state.connected = true;
+            updateConnectionStatus();
+            saveState();
+            
+            addChatMessage({
+                type: 'system',
+                message: `Connected to ${state.channel}'s chat`
+            });
+        }
+
+        // Handle disconnection
+        function onDisconnected() {
+            state.connected = false;
+            updateConnectionStatus();
+            
+            addChatMessage({
+                type: 'system',
+                message: 'Disconnected from chat'
+            });
+        }
+
+        // Handle incoming chat messages
+        async function onMessage(channel, userstate, message, self) {
+            // Ignore messages from the bot itself
+            if (self) return;
+            
+            // Add message to chat
+            addChatMessage({
+                type: 'user',
+                username: userstate['display-name'] || userstate.username,
+                message,
+                color: userstate.color
+            });
+            
+            // Increment message counter for activity tracking
+            state.messageCounter++;
+            
+            // Check if we should respond
+            checkForBotResponse();
+        }
+
+        // Check if the bot should respond based on activity
+        function checkForBotResponse() {
+            // Only respond if we have an active bot
+            if (!state.activeBot) return;
+            
+            // Check activity threshold
+            if (state.messageCounter >= state.settings.activityThreshold) {
+                const timeSinceLastResponse = (Date.now() - state.lastBotResponse) / 1000;
+                
+                // Only respond if enough time has passed since last response
+                if (timeSinceLastResponse > state.settings.responseDelay) {
+                    // Clear any pending response
+                    if (state.responseTimer) {
+                        clearTimeout(state.responseTimer);
+                    }
+                    
+                    // Schedule a new response
+                    const delay = Math.random() * 1000 + state.settings.responseDelay * 1000;
+                    state.responseTimer = setTimeout(() => generateBotResponse(), delay);
+                    
+                    // Reset message counter
+                    state.messageCounter = 0;
+                }
+            }
+        }
+
+        // Generate a response from the active bot
+        async function generateBotResponse() {
+            try {
+                const contextMessages = state.chatMessages
+                    .filter(msg => msg.type === 'user')
+                    .slice(-state.settings.maxContextMessages)
+                    .map(msg => `${msg.username}: ${msg.message}`);
+                
+                // Prepare messages for AI
+                let conversationHistory = [];
+                
+                // Add system message with bot personality
+                conversationHistory.push({
+                    role: "system",
+                    content: `You are a Twitch chat bot named ${state.activeBot.name}. ${state.activeBot.context}
+                        Respond to the recent chat messages in a conversational and entertaining way.
+                        Keep your responses concise and engaging for a live stream audience.`
+                });
+                
+                // Add recent chat as context
+                if (contextMessages.length > 0) {
+                    conversationHistory.push({
+                        role: "user",
+                        content: `Here are the recent chat messages from the Twitch channel:
+                            ${contextMessages.join('\n')}
+                            
+                            Please respond to these messages as if you were participating in the chat.`
+                    });
+                } else {
+                    conversationHistory.push({
+                        role: "user",
+                        content: "The chat is just starting. Please introduce yourself to the viewers."
+                    });
+                }
+                
+                // Get response from AI
+                const completion = await websim.chat.completions.create({
+                    messages: conversationHistory
+                });
+                
+                const botMessage = completion.content;
+                
+                // Add bot message to chat
+                addChatMessage({
+                    type: 'bot',
+                    username: state.activeBot.name,
+                    message: botMessage
+                });
+                
+                // Speak the message if TTS is enabled
+                if (state.settings.tts.enabled) {
+                    speakMessage(botMessage);
+                }
+                
+                // Update last response time
+                state.lastBotResponse = Date.now();
+                
+            } catch (error) {
+                console.error('Error generating bot response:', error);
+                addChatMessage({
+                    type: 'system',
+                    message: `Error generating response: ${error.message}`
+                });
+            }
+        }
+
+        // Speak a message using TTS
+        function speakMessage(text) {
+            // Cancel any ongoing speech
+            state.speechSynthesis.cancel();
+            
+            // Create utterance
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Set voice and other properties
+            if (state.voices.length > 0 && state.settings.tts.voice !== null) {
+                utterance.voice = state.voices[state.settings.tts.voice];
+            }
+            
+            utterance.volume = state.settings.tts.volume;
+            utterance.rate = state.settings.tts.rate;
+            utterance.pitch = state.settings.tts.pitch;
+            
+            // Speak
+            state.speechSynthesis.speak(utterance);
+        }
+
+        // Test TTS with current settings
+        function testTTS() {
+            const testMessage = "Hello! This is a test of the text-to-speech system.";
+            speakMessage(testMessage);
+        }
+
+        // Create a new bot
+        function createBot() {
+            const name = elements.botName.value.trim();
+            const context = elements.botContext.value.trim();
+            
+            if (!name || !context) {
+                alert('Please enter both a name and context for your bot');
+                return;
+            }
+            
+            const newBot = {
+                id: Date.now().toString(),
+                name,
+                context,
+                created: new Date().toISOString()
+            };
+            
+            state.bots.push(newBot);
+            
+            // Clear inputs
+            elements.botName.value = '';
+            elements.botContext.value = '';
+            
+            // If no active bot, set this as active
+            if (!state.activeBot) {
+                state.activeBot = newBot;
+                updateActiveBotDisplay();
+            }
+            
+            renderBots();
+            saveState();
+        }
+
+        // Activate a bot
+        function activateBot(botId) {
+            const bot = state.bots.find(b => b.id === botId);
+            if (bot) {
+                state.activeBot = bot;
+                updateActiveBotDisplay();
+                renderBots();
+                saveState();
+                
+                addChatMessage({
+                    type: 'system',
+                    message: `Bot "${bot.name}" is now active`
+                });
+            }
+        }
+
+        // Delete a bot
+        function deleteBot(botId) {
+            if (confirm('Are you sure you want to delete this bot?')) {
+                state.bots = state.bots.filter(b => b.id !== botId);
+                
+                // If active bot was deleted, set active bot to null
+                if (state.activeBot && state.activeBot.id === botId) {
+                    state.activeBot = state.bots.length > 0 ? state.bots[0] : null;
+                    updateActiveBotDisplay();
+                }
+                
+                renderBots();
+                saveState();
+            }
+        }
+
+        // Update settings when changed by user
+        function updateSettings() {
+            state.settings.responseDelay = parseInt(elements.responseDelay.value) || 3;
+            state.settings.activityThreshold = parseInt(elements.activityThreshold.value) || 5;
+            state.settings.maxContextMessages = parseInt(elements.maxContextMessages.value) || 10;
+            
+            state.settings.tts.enabled = elements.ttsEnabled.checked;
+            state.settings.tts.voice = parseInt(elements.ttsVoice.value);
+            state.settings.tts.volume = parseFloat(elements.ttsVolume.value);
+            state.settings.tts.rate = parseFloat(elements.ttsRate.value);
+            state.settings.tts.pitch = parseFloat(elements.ttsPitch.value);
+            
+            saveState();
+        }
+
+        // Add a message to the chat display
+        function addChatMessage(messageData) {
+            // Add message to state
+            state.chatMessages.push(messageData);
+            
+            // Create message element
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${messageData.type}-message`;
+            
+            // Create message content based on type
+            if (messageData.type === 'system') {
+                messageEl.innerHTML = `<span class="system-message">${messageData.message}</span>`;
+            } else {
+                const usernameSpan = document.createElement('span');
+                usernameSpan.className = 'username';
+                usernameSpan.textContent = messageData.username;
+                
+                if (messageData.color && messageData.type === 'user') {
+                    usernameSpan.style.color = messageData.color;
+                }
+                
+                messageEl.appendChild(usernameSpan);
+                messageEl.appendChild(document.createTextNode(messageData.message));
+            }
+            
+            // Add to chat container
+            elements.chatMessages.appendChild(messageEl);
+            
+            // Scroll to bottom
+            elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+            
+            // Limit stored messages
+            if (state.chatMessages.length > 100) {
+                state.chatMessages = state.chatMessages.slice(-100);
+            }
+        }
+
+        // Update the connection status display
+        function updateConnectionStatus() {
+            elements.connectionStatus.textContent = state.connected ? 'Connected' : 'Disconnected';
+            elements.connectionIndicator.classList.toggle('connected', state.connected);
+            
+            elements.connectBtn.disabled = state.connected;
+            elements.disconnectBtn.disabled = !state.connected;
+            
+            if (state.connected) {
+                elements.channelName.value = state.channel;
+            }
+        }
+
+        // Update the active bot display
+        function updateActiveBotDisplay() {
+            elements.activeBotName.textContent = state.activeBot ? state.activeBot.name : 'None';
+        }
+
+        // Render the bot list
+        function renderBots() {
+            elements.botList.innerHTML = '';
+            
+            if (state.bots.length === 0) {
+                const emptyMessage = document.createElement('p');
+                emptyMessage.textContent = 'No bots created yet. Create your first bot above.';
+                elements.botList.appendChild(emptyMessage);
+                return;
+            }
+            
+            state.bots.forEach(bot => {
+                const botCard = document.createElement('div');
+                botCard.className = `bot-card ${state.activeBot && state.activeBot.id === bot.id ? 'active' : ''}`;
+                
+                const botName = document.createElement('h3');
+                botName.textContent = bot.name;
+                
+                const botContext = document.createElement('p');
+                botContext.textContent = bot.context.substring(0, 80) + (bot.context.length > 80 ? '...' : '');
+                
+                const botActions = document.createElement('div');
+                botActions.className = 'bot-actions';
+                
+                const activateBtn = document.createElement('button');
+                activateBtn.textContent = 'Activate';
+                activateBtn.disabled = state.activeBot && state.activeBot.id === bot.id;
+                activateBtn.addEventListener('click', () => activateBot(bot.id));
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.style.backgroundColor = '#ff5252';
+                deleteBtn.addEventListener('click', () => deleteBot(bot.id));
+                
+                botActions.appendChild(activateBtn);
+                botActions.appendChild(deleteBtn);
+                
+                botCard.appendChild(botName);
+                botCard.appendChild(botContext);
+                botCard.appendChild(botActions);
+                
+                elements.botList.appendChild(botCard);
+            });
+        }
+
+        // Save state to localStorage
+        function saveState() {
+            const stateToSave = {
+                channel: state.channel,
+                bots: state.bots,
+                activeBot: state.activeBot,
+                settings: state.settings
+            };
+            
+            localStorage.setItem('twitchBotState', JSON.stringify(stateToSave));
+        }
+
+        // Load state from localStorage
+        function loadState() {
+            const savedState = localStorage.getItem('twitchBotState');
+            
+            if (savedState) {
+                const parsedState = JSON.parse(savedState);
+                
+                state.channel = parsedState.channel || '';
+                state.bots = parsedState.bots || [];
+                state.activeBot = parsedState.activeBot;
+                state.settings = {
+                    ...state.settings,
+                    ...parsedState.settings
+                };
+                
+                // Update UI with loaded settings
+                elements.channelName.value = state.channel;
+                elements.responseDelay.value = state.settings.responseDelay;
+                elements.activityThreshold.value = state.settings.activityThreshold;
+                elements.maxContextMessages.value = state.settings.maxContextMessages;
+                elements.ttsEnabled.checked = state.settings.tts.enabled;
+                elements.ttsVolume.value = state.settings.tts.volume;
+                elements.ttsRate.value = state.settings.tts.rate;
+                elements.ttsPitch.value = state.settings.tts.pitch;
+                
+                updateActiveBotDisplay();
+            }
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"9e405a533db616b9","version":"2025.9.1","serverTiming":{"name":{"cfExtPri":true,"cfEdge":true,"cfOrigin":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}},"token":"4c6229722a6346bc8eb5cb0e5eae5d41","b":1}' crossorigin="anonymous"></script>
+</body>
+</html>
+
